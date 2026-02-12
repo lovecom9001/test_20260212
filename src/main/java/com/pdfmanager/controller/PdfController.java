@@ -67,6 +67,24 @@ public class PdfController {
         }
     }
 
+    @PostMapping("/replace")
+    public ResponseEntity<?> replacePages(
+            @RequestParam("targetFile") MultipartFile targetFile,
+            @RequestParam("replaceFile") MultipartFile replaceFile,
+            @RequestParam("replacePages") String replacePages) {
+        try {
+            byte[] targetData = targetFile.getBytes();
+            byte[] replaceData = replaceFile.getBytes();
+            List<Integer> pageNumbers = parsePageNumbers(replacePages);
+            byte[] result = pdfService.deleteAndInsert(targetData, replaceData, pageNumbers);
+            return buildPdfResponse(result, "replaced_" + targetFile.getOriginalFilename());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("{\"error\": \"" + e.getMessage() + "\"}");
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("{\"error\": \"PDF 처리 중 오류 발생: " + e.getMessage() + "\"}");
+        }
+    }
+
     @PostMapping("/delete-and-insert")
     public ResponseEntity<?> deleteAndInsert(
             @RequestParam("targetFile") MultipartFile targetFile,

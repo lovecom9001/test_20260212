@@ -205,6 +205,15 @@
             background: #c5221f;
         }
 
+        .btn.btn-warning {
+            background: #f9ab00;
+            color: #333;
+        }
+
+        .btn.btn-warning:hover {
+            background: #e09600;
+        }
+
         .btn.btn-success {
             background: #34a853;
         }
@@ -265,13 +274,14 @@
 <body>
     <div class="header">
         <h1>PDF 페이지 관리</h1>
-        <p>PDF 페이지 삭제, 삽입, 삭제 후 삽입</p>
+        <p>PDF 페이지 삭제, 삽입, 교체, 삭제 후 삽입</p>
     </div>
 
     <div class="container">
         <div class="tabs">
             <button class="tab active" data-tab="delete">페이지 삭제</button>
             <button class="tab" data-tab="insert">페이지 삽입</button>
+            <button class="tab" data-tab="replace">페이지 교체</button>
             <button class="tab" data-tab="delete-insert">삭제 후 삽입</button>
         </div>
 
@@ -324,6 +334,36 @@
             </div>
             <button class="btn" id="insertBtn" disabled>페이지 삽입</button>
             <div class="status" id="insertStatus"></div>
+        </div>
+
+        <!-- 페이지 교체 패널 -->
+        <div id="replace" class="panel">
+            <div class="form-group">
+                <label>원본 PDF 파일</label>
+                <div class="file-upload" id="replaceTargetUpload">
+                    <div class="upload-icon">&#128196;</div>
+                    <div class="upload-text">클릭하거나 파일을 드래그하세요</div>
+                    <div class="file-name"></div>
+                    <input type="file" id="replaceTargetFile" accept=".pdf">
+                </div>
+                <div class="file-info" id="replaceTargetInfo"></div>
+            </div>
+            <div class="form-group">
+                <label>교체할 새 PDF 파일</label>
+                <div class="file-upload" id="replaceFileUpload">
+                    <div class="upload-icon">&#128196;</div>
+                    <div class="upload-text">클릭하거나 파일을 드래그하세요</div>
+                    <div class="file-name"></div>
+                    <input type="file" id="replaceFile" accept=".pdf">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>교체할 페이지 번호</label>
+                <input type="text" id="replacePages" placeholder="예: 115 또는 10~15">
+                <div class="hint">지정한 페이지가 삭제되고, 그 위치에 새 PDF의 내용이 들어갑니다 (범위: 1~5)</div>
+            </div>
+            <button class="btn btn-warning" id="replaceBtn" disabled>페이지 교체</button>
+            <div class="status" id="replaceStatus"></div>
         </div>
 
         <!-- 삭제 후 삽입 패널 -->
@@ -403,6 +443,8 @@
         setupFileUpload('deleteFile', 'deleteFileUpload', 'deleteFileInfo');
         setupFileUpload('insertTargetFile', 'insertTargetUpload', 'insertTargetInfo');
         setupFileUpload('insertFile', 'insertFileUpload', null);
+        setupFileUpload('replaceTargetFile', 'replaceTargetUpload', 'replaceTargetInfo');
+        setupFileUpload('replaceFile', 'replaceFileUpload', null);
         setupFileUpload('diTargetFile', 'diTargetUpload', 'diTargetInfo');
         setupFileUpload('diInsertFile', 'diInsertUpload', null);
 
@@ -417,6 +459,11 @@
                 !document.getElementById('insertFile').files[0] ||
                 !document.getElementById('insertAt').value;
 
+            document.getElementById('replaceBtn').disabled =
+                !document.getElementById('replaceTargetFile').files[0] ||
+                !document.getElementById('replaceFile').files[0] ||
+                !document.getElementById('replacePages').value.trim();
+
             document.getElementById('diBtn').disabled =
                 !document.getElementById('diTargetFile').files[0] ||
                 !document.getElementById('diInsertFile').files[0] ||
@@ -425,6 +472,7 @@
 
         document.getElementById('deletePages').addEventListener('input', updateButtons);
         document.getElementById('insertAt').addEventListener('input', updateButtons);
+        document.getElementById('replacePages').addEventListener('input', updateButtons);
         document.getElementById('diDeletePages').addEventListener('input', updateButtons);
 
         function showStatus(elementId, message, type) {
@@ -500,6 +548,37 @@
                 }
             } catch (e) {
                 showStatus('insertStatus', '서버 연결 오류: ' + e.message, 'error');
+            }
+            updateButtons();
+        });
+
+        // 페이지 교체
+        document.getElementById('replaceBtn').addEventListener('click', async () => {
+            const targetFile = document.getElementById('replaceTargetFile').files[0];
+            const replaceFile = document.getElementById('replaceFile').files[0];
+            const replacePages = document.getElementById('replacePages').value.trim();
+
+            showStatus('replaceStatus', '처리 중...', 'loading');
+            document.getElementById('replaceBtn').disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('targetFile', targetFile);
+                formData.append('replaceFile', replaceFile);
+                formData.append('replacePages', replacePages);
+
+                const response = await fetch('/api/pdf/replace', { method: 'POST', body: formData });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    downloadBlob(blob, 'replaced_' + targetFile.name);
+                    showStatus('replaceStatus', '페이지 교체 완료! 파일이 다운로드됩니다.', 'success');
+                } else {
+                    const data = await response.json();
+                    showStatus('replaceStatus', data.error || '오류가 발생했습니다.', 'error');
+                }
+            } catch (e) {
+                showStatus('replaceStatus', '서버 연결 오류: ' + e.message, 'error');
             }
             updateButtons();
         });
