@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -86,12 +87,28 @@ public class PdfController {
 
     private List<Integer> parsePageNumbers(String pages) {
         try {
-            return Arrays.stream(pages.split(","))
-                    .map(String::trim)
-                    .map(Integer::parseInt)
-                    .collect(Collectors.toList());
+            List<Integer> result = new ArrayList<>();
+            for (String part : pages.split(",")) {
+                part = part.trim();
+                if (part.contains("~")) {
+                    String[] range = part.split("~", 2);
+                    int start = Integer.parseInt(range[0].trim());
+                    int end = Integer.parseInt(range[1].trim());
+                    if (start > end) {
+                        throw new IllegalArgumentException(
+                                "범위의 시작 값이 끝 값보다 클 수 없습니다: " + start + "~" + end);
+                    }
+                    for (int i = start; i <= end; i++) {
+                        result.add(i);
+                    }
+                } else {
+                    result.add(Integer.parseInt(part));
+                }
+            }
+            return result;
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("페이지 번호 형식이 올바르지 않습니다. 쉼표로 구분된 숫자를 입력하세요. (예: 1,3,5)");
+            throw new IllegalArgumentException(
+                    "페이지 번호 형식이 올바르지 않습니다. (예: 1,3,5 또는 1~5 또는 1~3,7,9~11)");
         }
     }
 
