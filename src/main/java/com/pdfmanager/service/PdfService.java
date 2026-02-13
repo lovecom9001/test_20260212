@@ -125,6 +125,30 @@ public class PdfService {
     }
 
     /**
+     * PDF에서 특정 페이지들을 추출하여 새 PDF로 반환한다.
+     *
+     * @param pdfData      원본 PDF 바이트 배열
+     * @param pageNumbers  추출할 페이지 번호 목록 (1-based)
+     * @return 추출된 페이지로 구성된 새 PDF 바이트 배열
+     */
+    public byte[] extractPages(byte[] pdfData, List<Integer> pageNumbers) throws IOException {
+        try (PDDocument sourceDoc = Loader.loadPDF(pdfData);
+             PDDocument newDoc = new PDDocument()) {
+            int totalPages = sourceDoc.getNumberOfPages();
+            validatePageNumbers(pageNumbers, totalPages);
+
+            for (int pageNum : pageNumbers) {
+                PDPage page = sourceDoc.getPages().get(pageNum - 1);
+                newDoc.importPage(page);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            newDoc.save(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
      * PDF의 총 페이지 수를 반환한다.
      */
     public int getPageCount(byte[] pdfData) throws IOException {

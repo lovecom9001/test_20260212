@@ -248,6 +248,101 @@
             display: block;
         }
 
+        .btn.btn-split {
+            background: #00897b;
+        }
+
+        .btn.btn-split:hover {
+            background: #00695c;
+        }
+
+        .split-rule {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .split-rule .split-pages {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .split-rule .split-filename {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .split-rule .split-pages:focus,
+        .split-rule .split-filename:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+        }
+
+        .rule-remove-btn {
+            background: #ea4335;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .rule-remove-btn:hover {
+            background: #c5221f;
+        }
+
+        .btn-add-rule {
+            background: none;
+            border: 2px dashed #1a73e8;
+            color: #1a73e8;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            margin-top: 4px;
+            transition: all 0.2s;
+        }
+
+        .btn-add-rule:hover {
+            background: #e8f0fe;
+        }
+
+        .split-rule-header {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #888;
+            font-weight: 600;
+        }
+
+        .split-rule-header span {
+            flex: 1;
+        }
+
+        .split-rule-header span:last-child {
+            width: 36px;
+            flex-shrink: 0;
+            flex-grow: 0;
+        }
+
         .divider {
             height: 1px;
             background: #eee;
@@ -274,7 +369,7 @@
 <body>
     <div class="header">
         <h1>PDF 페이지 관리</h1>
-        <p>PDF 페이지 삭제, 삽입, 교체, 삭제 후 삽입</p>
+        <p>PDF 페이지 삭제, 삽입, 교체, 삭제 후 삽입, 페이지 분리</p>
     </div>
 
     <div class="container">
@@ -283,6 +378,7 @@
             <button class="tab" data-tab="insert">페이지 삽입</button>
             <button class="tab" data-tab="replace">페이지 교체</button>
             <button class="tab" data-tab="delete-insert">삭제 후 삽입</button>
+            <button class="tab" data-tab="split">페이지 분리</button>
         </div>
 
         <!-- 페이지 삭제 패널 -->
@@ -395,6 +491,39 @@
             <button class="btn btn-success" id="diBtn" disabled>삭제 후 삽입</button>
             <div class="status" id="diStatus"></div>
         </div>
+
+        <!-- 페이지 분리 패널 -->
+        <div id="split" class="panel">
+            <div class="form-group">
+                <label>PDF 파일 선택</label>
+                <div class="file-upload" id="splitFileUpload">
+                    <div class="upload-icon">&#128196;</div>
+                    <div class="upload-text">클릭하거나 파일을 드래그하세요</div>
+                    <div class="file-name"></div>
+                    <input type="file" id="splitFile" accept=".pdf">
+                </div>
+                <div class="file-info" id="splitFileInfo"></div>
+            </div>
+            <div class="form-group">
+                <label>분리 규칙</label>
+                <div class="hint" style="margin-bottom: 12px;">각 규칙에 추출할 페이지 번호와 저장할 파일명을 입력하세요 (결과는 ZIP 파일로 다운로드됩니다)</div>
+                <div class="split-rule-header">
+                    <span>페이지 번호</span>
+                    <span>저장 파일명</span>
+                    <span></span>
+                </div>
+                <div id="splitRules">
+                    <div class="split-rule">
+                        <input type="text" class="split-pages" placeholder="예: 1 또는 2,3 또는 4~5">
+                        <input type="text" class="split-filename" placeholder="예: 테스트1">
+                        <button type="button" class="rule-remove-btn" title="규칙 삭제">&times;</button>
+                    </div>
+                </div>
+                <button type="button" class="btn-add-rule" id="addRuleBtn">+ 규칙 추가</button>
+            </div>
+            <button class="btn btn-split" id="splitBtn" disabled>페이지 분리</button>
+            <div class="status" id="splitStatus"></div>
+        </div>
     </div>
 
     <script>
@@ -447,6 +576,7 @@
         setupFileUpload('replaceFile', 'replaceFileUpload', null);
         setupFileUpload('diTargetFile', 'diTargetUpload', 'diTargetInfo');
         setupFileUpload('diInsertFile', 'diInsertUpload', null);
+        setupFileUpload('splitFile', 'splitFileUpload', 'splitFileInfo');
 
         // 버튼 활성화
         function updateButtons() {
@@ -468,6 +598,20 @@
                 !document.getElementById('diTargetFile').files[0] ||
                 !document.getElementById('diInsertFile').files[0] ||
                 !document.getElementById('diDeletePages').value.trim();
+
+            // 분리 버튼 활성화 조건: 파일 선택 + 최소 하나의 완전한 규칙
+            const splitFile = document.getElementById('splitFile').files[0];
+            const splitRules = document.querySelectorAll('#splitRules .split-rule');
+            let hasValidRule = false;
+            for (const rule of splitRules) {
+                const pages = rule.querySelector('.split-pages').value.trim();
+                const filename = rule.querySelector('.split-filename').value.trim();
+                if (pages && filename) {
+                    hasValidRule = true;
+                    break;
+                }
+            }
+            document.getElementById('splitBtn').disabled = !splitFile || !hasValidRule;
         }
 
         document.getElementById('deletePages').addEventListener('input', updateButtons);
@@ -610,6 +754,91 @@
                 }
             } catch (e) {
                 showStatus('diStatus', '서버 연결 오류: ' + e.message, 'error');
+            }
+            updateButtons();
+        });
+
+        // 페이지 분리 - 규칙 추가
+        document.getElementById('addRuleBtn').addEventListener('click', () => {
+            addSplitRule();
+        });
+
+        function addSplitRule() {
+            const rulesContainer = document.getElementById('splitRules');
+            const rule = document.createElement('div');
+            rule.className = 'split-rule';
+            rule.innerHTML = `
+                <input type="text" class="split-pages" placeholder="예: 1 또는 2,3 또는 4~5">
+                <input type="text" class="split-filename" placeholder="예: 테스트1">
+                <button type="button" class="rule-remove-btn" title="규칙 삭제">&times;</button>
+            `;
+            rulesContainer.appendChild(rule);
+
+            rule.querySelector('.split-pages').addEventListener('input', updateButtons);
+            rule.querySelector('.split-filename').addEventListener('input', updateButtons);
+            rule.querySelector('.rule-remove-btn').addEventListener('click', function() {
+                removeSplitRule(this);
+            });
+            updateButtons();
+        }
+
+        // 규칙 삭제
+        function removeSplitRule(btn) {
+            const rulesContainer = document.getElementById('splitRules');
+            if (rulesContainer.children.length > 1) {
+                btn.closest('.split-rule').remove();
+                updateButtons();
+            }
+        }
+
+        // 초기 규칙의 이벤트 리스너 설정
+        document.querySelectorAll('#splitRules .split-rule').forEach(rule => {
+            rule.querySelector('.split-pages').addEventListener('input', updateButtons);
+            rule.querySelector('.split-filename').addEventListener('input', updateButtons);
+            rule.querySelector('.rule-remove-btn').addEventListener('click', function() {
+                removeSplitRule(this);
+            });
+        });
+
+        // 페이지 분리 실행
+        document.getElementById('splitBtn').addEventListener('click', async () => {
+            const file = document.getElementById('splitFile').files[0];
+            const ruleElements = document.querySelectorAll('#splitRules .split-rule');
+
+            const rules = [];
+            for (const rule of ruleElements) {
+                const pages = rule.querySelector('.split-pages').value.trim();
+                const filename = rule.querySelector('.split-filename').value.trim();
+                if (pages && filename) {
+                    rules.push({ pages, filename });
+                }
+            }
+
+            if (rules.length === 0) {
+                showStatus('splitStatus', '최소 하나의 분리 규칙을 입력해주세요.', 'error');
+                return;
+            }
+
+            showStatus('splitStatus', '처리 중...', 'loading');
+            document.getElementById('splitBtn').disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('rules', JSON.stringify(rules));
+
+                const response = await fetch('/api/pdf/split', { method: 'POST', body: formData });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    downloadBlob(blob, 'split_pages.zip');
+                    showStatus('splitStatus', '페이지 분리 완료! ZIP 파일이 다운로드됩니다.', 'success');
+                } else {
+                    const data = await response.json();
+                    showStatus('splitStatus', data.error || '오류가 발생했습니다.', 'error');
+                }
+            } catch (e) {
+                showStatus('splitStatus', '서버 연결 오류: ' + e.message, 'error');
             }
             updateButtons();
         });

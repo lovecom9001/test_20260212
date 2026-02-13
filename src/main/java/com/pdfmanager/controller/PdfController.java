@@ -7,11 +7,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/api/pdf")
@@ -96,6 +103,53 @@ public class PdfController {
             List<Integer> pageNumbers = parsePageNumbers(deletePages);
             byte[] result = pdfService.deleteAndInsert(targetData, insertData, pageNumbers);
             return buildPdfResponse(result, "modified_" + targetFile.getOriginalFilename());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("{\"error\": \"" + e.getMessage() + "\"}");
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("{\"error\": \"PDF 처리 중 오류 발생: " + e.getMessage() + "\"}");
+        }
+    }
+
+    @PostMapping("/split")
+    public ResponseEntity<?> splitPages(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("rules") String rulesJson) {
+        try {
+            byte[] pdfData = file.getBytes();
+            ObjectMapper mapper = new ObjectMapper();
+            List<Map<String, String>> rules = mapper.readValue(rulesJson,
+                    new TypeReference<List<Map<String, String>>>() {});
+
+            if (rules.isEmpty()) {
+                return ResponseEntity.badRequest().body("{\"error\": \"분리 규칙이 비어있습니다.\"}");
+            }
+
+            ByteArrayOutputStream zipOut = new ByteArrayOutputStream();
+            try (ZipOutputStream zos = new ZipOutputStream(zipOut)) {
+                for (Map<String, String> rule : rules) {
+                    String pages = rule.get("pages");
+                    String filename = rule.get("filename");
+                    if (pages == null || pages.trim().isEmpty() || filename == null || filename.trim().isEmpty()) {
+                        return ResponseEntity.badRequest().body("{\"error\": \"각 규칙에 페이지와 파일명이 필요합니다.\"}");
+                    }
+
+                    List<Integer> pageNumbers = parsePageNumbers(pages);
+                    byte[] extractedPdf = pdfService.extractPages(pdfData, pageNumbers);
+
+                    String pdfFilename = filename.trim().endsWith(".pdf") ? filename.trim() : filename.trim() + ".pdf";
+                    ZipEntry entry = new ZipEntry(pdfFilename);
+                    zos.putNextEntry(entry);
+                    zos.write(extractedPdf);
+                    zos.closeEntry();
+                }
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.valueOf("application/zip"));
+            headers.setContentDispositionFormData("attachment", "split_pages.zip");
+            byte[] zipData = zipOut.toByteArray();
+            headers.setContentLength(zipData.length);
+            return ResponseEntity.ok().headers(headers).body(zipData);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body("{\"error\": \"" + e.getMessage() + "\"}");
         } catch (IOException e) {
