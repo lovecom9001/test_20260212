@@ -506,7 +506,7 @@
             </div>
             <div class="form-group">
                 <label>분리 규칙</label>
-                <div class="hint" style="margin-bottom: 12px;">각 규칙에 추출할 페이지 번호와 저장할 파일명을 입력하세요 (결과는 ZIP 파일로 다운로드됩니다)</div>
+                <div class="hint" style="margin-bottom: 12px;">각 규칙에 추출할 페이지 번호와 저장할 파일명을 입력하세요 (각 규칙별로 PDF 파일이 다운로드됩니다)</div>
                 <div class="split-rule-header">
                     <span>페이지 번호</span>
                     <span>저장 파일명</span>
@@ -819,24 +819,34 @@
                 return;
             }
 
-            showStatus('splitStatus', '처리 중...', 'loading');
+            showStatus('splitStatus', '처리 중... (0/' + rules.length + ')', 'loading');
             document.getElementById('splitBtn').disabled = true;
 
             try {
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('rules', JSON.stringify(rules));
+                let successCount = 0;
+                for (let i = 0; i < rules.length; i++) {
+                    const rule = rules[i];
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('pages', rule.pages);
+                    formData.append('filename', rule.filename);
 
-                const response = await fetch('/api/pdf/split', { method: 'POST', body: formData });
+                    const response = await fetch('/api/pdf/split', { method: 'POST', body: formData });
 
-                if (response.ok) {
-                    const blob = await response.blob();
-                    downloadBlob(blob, 'split_pages.zip');
-                    showStatus('splitStatus', '페이지 분리 완료! ZIP 파일이 다운로드됩니다.', 'success');
-                } else {
-                    const data = await response.json();
-                    showStatus('splitStatus', data.error || '오류가 발생했습니다.', 'error');
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const pdfFilename = rule.filename.endsWith('.pdf') ? rule.filename : rule.filename + '.pdf';
+                        downloadBlob(blob, pdfFilename);
+                        successCount++;
+                        showStatus('splitStatus', '처리 중... (' + successCount + '/' + rules.length + ')', 'loading');
+                    } else {
+                        const data = await response.json();
+                        showStatus('splitStatus', (data.error || '오류가 발생했습니다.') + ' (규칙 ' + (i + 1) + ')', 'error');
+                        updateButtons();
+                        return;
+                    }
                 }
+                showStatus('splitStatus', '페이지 분리 완료! ' + successCount + '개의 PDF 파일이 다운로드됩니다.', 'success');
             } catch (e) {
                 showStatus('splitStatus', '서버 연결 오류: ' + e.message, 'error');
             }
